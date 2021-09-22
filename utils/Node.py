@@ -1,13 +1,12 @@
 class Node:
 
-    def __init__(self, attr):
-        self.children = []
+    def __init__(self, attr, val):
+        self.children = {}
         self.name = attr
-        self.index = 0
+        self.val = val
 
-    def add_child(self, node):
-        self.children[self.index] = node
-        self.index += 1
+    def add_child(self, name, val):
+        self.children[name] = Node(name, val)
 
     def print_node(self):
         print(self.name)
