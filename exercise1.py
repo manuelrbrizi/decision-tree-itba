@@ -33,6 +33,7 @@ def discretize_attributes():
     df.loc[((df["Duration of Credit (month)"] <= 24) & (df["Duration of Credit (month)"] > 12)), ['DURATION_TYPE']] = 2
     df.loc[(df["Duration of Credit (month)"] > 24), ['DURATION_TYPE']] = 3
     df.drop('Duration of Credit (month)', inplace=True, axis=1)
+    df.rename(columns={"AMOUNT_TYPE": "Credit Amount", "AGE_TYPE": "Age", "DURATION_TYPE": "Duration of Credit"}, inplace=True)
 
 
 def calculate_gain():
@@ -78,18 +79,81 @@ def calculate_attribute_entropy(dic, column, val_type):
         return -positive_cases * math.log2(positive_cases) - negative_cases * math.log2(negative_cases), total_cases
 
 
-def calculate_gain_given_attribute(attr):
+# def calculate_gain_given_attribute(attr, attr_list):
+#     dic = {}
+#
+#     for attr_value in df[attr].unique():
+#         # Los attr_value son el 1, 2, 3 y 4 del Account Balance
+#         # Entonces los guardo como hijos del nodo padre que es Account Balance
+#         parent_node.add_child(attr_value, -1)
+#
+#         # Por cada valor de Account Balance voy a iniciar un diccionario
+#         dic[attr_value] = {}
+#         for column in df.columns:
+#             if column != "Creditability" and (column not in attr_list):
+#                 # Cada atributo que no sea ni Creditability ni Account Balance va a tener su propio diccionario.
+#                 # Llamemos a este tributo other_attr
+#                 dic[attr_value][column] = {}
+#                 for column_value in df[column].unique():
+#                     # Cada valor de other_attr (por ejemplo 1, 2, 3) va a tener positivos y negativos
+#                     # Aca los inicializo
+#                     dic[attr_value][column][column_value] = {}
+#                     dic[attr_value][column][column_value]["positive"] = 0
+#                     dic[attr_value][column][column_value]["negative"] = 0
+#
+#     # Para todos los registros, quiero recorrer cada uno de sus atributos, por eso doble for
+#     for i in range(len(df)):
+#         for j in range(1, len(df.columns)):
+#
+#             # NO analizo las columnas de los atributos que ya tenemos dados
+#             if df.columns[j] not in attr_list:
+#
+#                 # Lo que si quiero ver es los posibles valores de cada atributo que no es mi attr dado
+#                 # Cuando hacemos dic[df.iloc[i][attr]] estamos haciendo el "dado el atributo"
+#                 # Porque la posicion df.iloc[i][attr] del dic es la posicion que corresponde a ese posible valor de attr
+#                 # Entonces aca solamente contamos positivos y negativos
+#
+#                 if df.iloc[i][0] == 1:
+#                     dic[df.iloc[i][attr]][df.columns[j]][df.iloc[i][j]]["positive"] += 1
+#                 else:
+#                     dic[df.iloc[i][attr]][df.columns[j]][df.iloc[i][j]]["negative"] += 1
+#
+#     gain_dic = {}
+#
+#     # Ahora se viene la papa. Tenemos que hacer la cuenta de la entropia
+#     # Para cada posible valor de Account Balance (1,2,3,4) tengo que ver TODOS los demas atributos (menos Creditability)
+#     # Y determinar cual es el que tiene mayor ganancia
+#
+#     # Entonces, para cada valor de Account Balance
+#     for attr_value in df[attr].unique():
+#
+#         # Me calculo la entropia de ese valor (sería H(1), H(2), etc)
+#         attr_entropy = calculate_entropy_of_attr(attr, attr_value)
+#         gain_dic[attr_value] = {}
+#
+#         # Ahora, del diccionario generado para los valores 1,2,3,4 me levanto TODOS los nombres de atributos
+#         # Y con ese nombre voy a llamar a la funcion calculate_entropy_given_attr, que busca
+#         # TODOS los posibles valores de ese atributo y hace el calculo de entropia H(1,Hombre), H(1,Mujer),
+#         # Este metodo devuelve directamente la cuentita hecha con la frecuencia relativa de cada valor del
+#         # otro atributo, por lo que directamente la restamos y ya
+#         for other_attr in dic[attr_value].keys():
+#             gain_dic[attr_value][other_attr] = attr_entropy - calculate_entropy_given_attr(dic, attr_value, other_attr)
+#
+#     return gain_dic
+
+
+# Voy a hacer el ejemplo de la iteracion de este metodo con Account Balance como nodo raiz
+# Es para entender bien que pasa en casa pasito
+def calculate_gain_given_attribute(attr, attr_list, current_node, tree_length, desired_tree_length):
     dic = {}
 
+    # Los attr_value son el 1, 2, 3 y 4 del Account Balance
     for attr_value in df[attr].unique():
-        # Los attr_value son el 1, 2, 3 y 4 del Account Balance
-        # Entonces los guardo como hijos del nodo padre que es Account Balance
-        parent_node.add_child(attr_value, -1)
 
         # Por cada valor de Account Balance voy a iniciar un diccionario
         dic[attr_value] = {}
         for column in df.columns:
-            if column != "Creditability" and column != attr:
+            if column != "Creditability" and (column not in attr_list):
                 # Cada atributo que no sea ni Creditability ni Account Balance va a tener su propio diccionario.
                 # Llamemos a este tributo other_attr
                 dic[attr_value][column] = {}
@@ -104,8 +168,8 @@ def calculate_gain_given_attribute(attr):
     for i in range(len(df)):
         for j in range(1, len(df.columns)):
 
-            # NO analizo la columna del atributo que ya tenemos dado
-            if df.columns[j] != attr:
+            # NO analizo las columnas de los atributos que ya tenemos dados
+            if df.columns[j] not in attr_list:
 
                 # Lo que si quiero ver es los posibles valores de cada atributo que no es mi attr dado
                 # Cuando hacemos dic[df.iloc[i][attr]] estamos haciendo el "dado el atributo"
@@ -138,7 +202,23 @@ def calculate_gain_given_attribute(attr):
         for other_attr in dic[attr_value].keys():
             gain_dic[attr_value][other_attr] = attr_entropy - calculate_entropy_given_attr(dic, attr_value, other_attr)
 
-    return gain_dic
+    # A esta altura, en gain_dic tengo todas las entropias de todos los atributos hijos de Account Balance
+    # Voy a iterar por cada uno de estos valores, y dentro de cada uno de estos valores por cada otro atributo
+    # Para ver cual de estos atributos tiene mas ganancia. El que tenga mas ganancia es un nuevo hijo de
+    # Account Balance
+    for attr_value in df[attr].unique():
+        # Agrego al atributo maximo como hijo de Account Balance
+        new_child_name = max(gain_dic[attr_value], key=gain_dic[attr_value].get)
+        new_node = current_node.add_child(new_child_name, attr, attr_value)
+        # Creo una lista auxiliar para no romper la lista de atributos que tengo hasta ahora
+        other_list = attr_list.copy()
+        other_list.append(new_child_name)
+
+        # Recursivamente llamo esta funcion para construir el arbol
+        if tree_length < desired_tree_length:
+            calculate_gain_given_attribute(new_child_name, other_list, new_node, tree_length+1, desired_tree_length)
+        else:
+            return
 
 
 def calculate_entropy_of_attr(attr, attr_value):
@@ -168,7 +248,6 @@ def calculate_entropy_given_attr(dic, attr_value, other_attr):
         positive_cases = dic[attr_value][other_attr][other_attr_value]["positive"]
         negative_cases = dic[attr_value][other_attr][other_attr_value]["negative"]
         current_cases = (positive_cases + negative_cases)
-        #print(other_attr, other_attr_value, positive_cases, negative_cases)
 
         if current_cases != 0:
             total_cases += current_cases
@@ -186,7 +265,6 @@ def calculate_entropy_given_attr(dic, attr_value, other_attr):
     # Cuando salgo de ese for, en attr_entropy tengo 3*H(1,"Mujer") * 4*H(1,"Hombre")
     # Lo que quiero ahora es dividir por los casos totales que hay, o sea sumar la cantidad de Hombres, Mujeres, etc
     attr_entropy /= total_cases
-    #print(other_attr, attr_entropy)
 
     # Devuelvo toda esa cuenta que es la entropia del atributo other_attr
     return attr_entropy
@@ -197,7 +275,6 @@ df = pd.read_csv("resources/german_credit.csv")
 discretize_attributes()
 entropy, total_germans = calculate_entropy()
 gain = calculate_gain()
-parent_node = Node(max(gain, key=gain.get), -1)
+parent_node = Node(max(gain, key=gain.get), "root", "root")
+calculate_gain_given_attribute(parent_node.name, [parent_node.name], parent_node, 1, 3)
 parent_node.print_node()
-gain = calculate_gain_given_attribute(parent_node.name)
-print(gain)
