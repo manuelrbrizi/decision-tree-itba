@@ -39,7 +39,7 @@ class Node:
 
         while True:
             if current_node.is_final:
-                print("Creditability = ", row["Creditability"], ", Classified = ", current_node.value)
+                # print("Creditability = ", row["Creditability"], ", Classified = ", current_node.value)
                 self.total_classified += 1
                 if row["Creditability"] == current_node.value:
                     self.total_ok += 1

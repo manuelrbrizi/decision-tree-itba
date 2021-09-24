@@ -204,7 +204,11 @@ def calculate_gain_given_attribute(attr_list, attr_value_list, current_node, tre
 
 
     # Me calculo la entropia de ese valor (sería H(1), H(2), etc)
-    attr_entropy = calculate_entropy_of_attr(attr_list[-1], attr_value_list[-1])
+    attr_entropy = calculate_entropy_of_attr(attr_list, attr_value_list)
+    if attr_entropy == 0:
+        node_val = final_value_of(attr_list[-1], attr_value_list[-1], attr_list, attr_value_list)
+        current_node.set_node_final(node_val)
+        return
     # gain_dic[attr_value] = {}
 
     # Ahora, del diccionario generado para los valores 1,2,3,4 me levanto TODOS los nombres de atributos
@@ -213,7 +217,9 @@ def calculate_gain_given_attribute(attr_list, attr_value_list, current_node, tre
     # Este metodo devuelve directamente la cuentita hecha con la frecuencia relativa de cada valor del
     # otro atributo, por lo que directamente la restamos y ya
     for other_attr in dic.keys():
-        gain_dic[other_attr] = attr_entropy - calculate_entropy_given_attr(dic, other_attr)
+        aux = calculate_entropy_given_attr(dic, other_attr)
+        # print("ATTR_ENTROPY = ", attr_entropy, ", OTHER_ATTR_ENTROPY = ", aux)
+        gain_dic[other_attr] = attr_entropy - aux
 
     # A esta altura, en gain_dic tengo todas las entropias de todos los atributos hijos de Account Balance
     # Voy a iterar por cada uno de estos valores, y dentro de cada uno de estos valores por cada otro atributo
@@ -232,9 +238,8 @@ def calculate_gain_given_attribute(attr_list, attr_value_list, current_node, tre
     for other_attr_value in df[new_child_name].unique():
 
         if time_to_prune(attr_list, attr_value_list):
-            print("PRUNE! ", attr_list)
             final_child = new_node.add_child("FINAL_NODE", new_child_name, other_attr_value)
-            final_value = final_value_of(new_child_name, other_attr_value)
+            final_value = final_value_of(new_child_name, other_attr_value, attr_list, attr_value_list)
             final_child.set_node_final(final_value)
         else:
             other_value_list = attr_value_list.copy()
@@ -248,7 +253,7 @@ def calculate_gain_given_attribute(attr_list, attr_value_list, current_node, tre
             # posibles valores. Y si es un "si" o un "no" depende de cuantos positivos y negativos tenga
             else:
                 final_child = new_node.add_child("FINAL_NODE", new_child_name, other_attr_value)
-                final_value = final_value_of(new_child_name, other_attr_value)
+                final_value = final_value_of(new_child_name, other_attr_value, attr_list, attr_value_list)
                 final_child.set_node_final(final_value)
 
 
@@ -262,38 +267,58 @@ def time_to_prune(attr_list, attr_value_list):
 
     positive_cases = (aux_df[aux_df["Creditability"] == 1].count())[0]
     negative_cases = (aux_df[aux_df["Creditability"] == 0].count())[0]
+    #print("Pos = ", positive_cases, ", Negative = ", negative_cases)
 
-    if positive_cases + negative_cases < 20 or positive_cases >= 3*negative_cases or negative_cases >= 3*positive_cases:
+    if positive_cases >= 3*negative_cases or negative_cases >= 3*positive_cases:
         return True
     else:
         return False
 
 
-def final_value_of(new_child_name, other_attr_value):
-    new_df = df.loc[df[new_child_name] == other_attr_value]
-    positive_cases = (new_df[new_df["Creditability"] == 1].count())[0]
-    negative_cases = (new_df[new_df["Creditability"] == 0].count())[0]
+def final_value_of(new_child_name, other_attr_value, attr_list, attr_value_list):
+    aux_df = df.copy()
+
+    # Solo me quedo con los que cumplen todos los "dado el atributo previo"
+    for a in range(len(attr_list)):
+        aux_df = aux_df.loc[df[attr_list[a]] == attr_value_list[a]]
+
+    aux_df = aux_df.loc[df[new_child_name] == other_attr_value]
+    positive_cases = (aux_df[aux_df["Creditability"] == 1].count())[0]
+    negative_cases = (aux_df[aux_df["Creditability"] == 0].count())[0]
     if positive_cases >= negative_cases:
         return 1
     else:
         return 0
 
 
-def calculate_entropy_of_attr(attr, attr_value):
-    df_positive_cases = df[df["Creditability"] == 1]
-    positive_cases = (df_positive_cases[df_positive_cases[attr] == attr_value].count())[0]
+def calculate_entropy_of_attr(attr_list, attr_value_list):
+    # df_positive_cases = df[df["Creditability"] == 1]
+    # positive_cases = (df_positive_cases[df_positive_cases[attr] == attr_value].count())[0]
+    #
+    # df_negative_cases = df[df["Creditability"] == 0]
+    # negative_cases = (df_negative_cases[df_negative_cases[attr] == attr_value].count())[0]
+    #
+    # total_cases = positive_cases + negative_cases
+    # positive_cases /= total_cases
+    # negative_cases /= total_cases
 
-    df_negative_cases = df[df["Creditability"] == 0]
-    negative_cases = (df_negative_cases[df_negative_cases[attr] == attr_value].count())[0]
+    aux_df = df.copy()
 
+    # Solo me quedo con los que cumplen todos los "dado el atributo previo"
+    for a in range(len(attr_list)):
+        aux_df = aux_df.loc[df[attr_list[a]] == attr_value_list[a]]
+
+    positive_cases = (aux_df[aux_df["Creditability"] == 1].count())[0]
+    negative_cases = (aux_df[aux_df["Creditability"] == 0].count())[0]
+    previous_entropy = 0
     total_cases = positive_cases + negative_cases
-    positive_cases /= total_cases
-    negative_cases /= total_cases
 
-    if positive_cases == 0.0 or negative_cases == 0.0:
-        return 0
-    else:
-        return -positive_cases * math.log2(positive_cases) - negative_cases * math.log2(negative_cases)
+    if positive_cases != 0:
+        previous_entropy += (-positive_cases / total_cases) * math.log2(positive_cases / total_cases)
+    if negative_cases != 0:
+        previous_entropy += (-negative_cases / total_cases) * math.log2(negative_cases / total_cases)
+
+    return previous_entropy
 
 
 def calculate_entropy_given_attr(dic, other_attr):
@@ -337,16 +362,12 @@ def divide_data_balanced(percentage):
     positive_df = df.drop(df[df["Creditability"] == 0].index)
     positive_df = positive_df.sample(frac=1).reset_index(drop=True)
     negative_df = df.drop(df[df["Creditability"] == 1].index)
-    negative_df = negative_df.sample(frac=1).reset_index(drop=True)
-    total_test_data = int(len(negative_df) * percentage)
 
-    train_result = positive_df[:total_test_data].append(negative_df[:total_test_data])
-    test_result = positive_df[total_test_data:].append(negative_df[total_test_data:])
+    ret_df = negative_df.append(positive_df[:len(negative_df)])
+    ret_df = ret_df.sample(frac=1).reset_index(drop=True)
+    total_test_data = int(len(ret_df) * percentage)
 
-    train_result = train_result.sample(frac=1).reset_index(drop=True)
-    test_result = test_result.sample(frac=1).reset_index(drop=True)
-
-    return train_result, test_result
+    return ret_df[:total_test_data], ret_df[total_test_data:]
 
 
 def divide_data(percentage):
@@ -364,7 +385,7 @@ df = pd.read_csv("resources/german_credit.csv")
 discretize_attributes()
 
 # Separo el conjunto de entrenamiento y el de testeo
-df, test_data = divide_data(0.8)
+df, test_data = divide_data(0.6)
 
 # Calculo las entropias y ganancias
 entropy, total_germans = calculate_entropy()
@@ -379,13 +400,13 @@ for val in df[parent_node.name].unique():
 for n in range(len(test_data)):
     parent_node.classify(test_data.iloc[n])
 
-print("(TEST) TOTAL CLASSIFIED: ", parent_node.total_classified, ", TOTAL_OK: ", parent_node.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", parent_node.total_classified_one)
+print("(TEST) TOTAL CLASSIFIED: ", parent_node.total_classified, ", TOTAL_OK: ", parent_node.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", parent_node.total_classified_one, ", PRECISION = ", parent_node.total_ok/parent_node.total_classified)
 
 # Clasifico los ejemplos de train
 parent_node.reset()
 for n in range(len(df)):
     parent_node.classify(df.iloc[n])
 
-print("(TRAIN) TOTAL CLASSIFIED: ", parent_node.total_classified, ", TOTAL_OK: ", parent_node.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", parent_node.total_classified_one)
+print("(TRAIN) TOTAL CLASSIFIED: ", parent_node.total_classified, ", TOTAL_OK: ", parent_node.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", parent_node.total_classified_one, ", PRECISION = ", parent_node.total_ok/parent_node.total_classified)
 
 print("--- %s seconds ---" % (time.time() - start_time))
