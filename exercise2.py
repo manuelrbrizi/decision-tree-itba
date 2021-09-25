@@ -1,6 +1,7 @@
 import math
-
+import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sn
 
 from utils.Comment import Comment
 
@@ -18,7 +19,8 @@ def calculate_word_average():
     print("##### WORDS AVERAGE #####")
     print("Total words: ", words)
     print("Total one-star ratings: ", total)
-    print("Average words per rating: ", words/total)
+    print("Average words per rating: ~", int(math.floor(words/total)))
+    print("Real average words per rating: ", words/total)
 
 
 def divide_data(percentage):
@@ -142,6 +144,8 @@ def get_confusion_matrix_knn(train, test):
     for elem in matrix:
         print(elem)
 
+    return matrix
+
 
 def get_confusion_matrix_weighted_knn(train, test):
     matrix = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
@@ -156,6 +160,8 @@ def get_confusion_matrix_weighted_knn(train, test):
     for elem in matrix:
         print(elem)
 
+    return matrix
+
 
 def cross_validation_knn():
     max_index = int(math.floor(len(df)/cross_validation_k))
@@ -169,10 +175,11 @@ def cross_validation_knn():
     for j in range(cross_validation_k):
         send_df = df.drop(df_list[j].index)
         correct, total = knn(send_df, df_list[j], False)
-        total_error += (correct/total)
+        total_error += ((total-correct)/total)
 
     print("\n##### CROSS-VALIDATION KNN #####")
     print("Average error: ", total_error/cross_validation_k, "\n")
+    return total_error / cross_validation_k
 
 
 def cross_validation_weighted_knn():
@@ -187,10 +194,32 @@ def cross_validation_weighted_knn():
     for j in range(cross_validation_k):
         send_df = df.drop(df_list[j].index)
         correct, total = weighted_knn(send_df, df_list[j], False)
-        total_error += (correct / total)
+        total_error += ((total-correct)/total)
 
     print("##### CROSS-VALIDATION WEIGHTED KNN #####")
     print("Average error: ", total_error / cross_validation_k, "\n")
+    return total_error / cross_validation_k
+
+
+def confusion_matrix(array):
+    df_cm = pd.DataFrame(array, index=["1", "2", "3", "4", "5"],
+                         columns=["1", "2", "3", "4", "5"])
+    ax = plt.figure(figsize=(10, 7))
+    sn.heatmap(df_cm, annot=True, cmap="Blues")
+    plt.xlabel("Predicted")
+    plt.ylabel("Ground Truth")
+    plt.show()
+
+
+def draw_multiple_points(x_list, y_list):
+    # Draw point based on above x, y axis values.
+    plt.scatter(x_list, y_list, s=10)
+    # Set chart title.
+    plt.title("Cross-validation error given K")
+    # Set x, y label text.
+    plt.xlabel("K")
+    plt.ylabel("Average error")
+    plt.show()
 
 
 k = 5
@@ -198,10 +227,30 @@ cross_validation_k = 5
 df = pd.read_csv("resources/reviews_sentiment.csv", sep=";")
 sanitize_data()
 calculate_word_average()
-train_data, test_data = divide_data(0.85)
+train_data, test_data = divide_data(0.8)
 knn(train_data, test_data, True)
 weighted_knn(train_data, test_data, True)
 get_confusion_matrix_knn(train_data, test_data)
 get_confusion_matrix_weighted_knn(train_data, test_data)
 cross_validation_knn()
 cross_validation_weighted_knn()
+
+# cross_validation_error = {}
+# y = []
+# x = []
+#
+# df = pd.read_csv("resources/reviews_sentiment.csv", sep=";")
+# sanitize_data()
+#
+# for o in range(2, 7):
+#     cross_validation_k = o
+#     cross_validation_error[o] = 0
+#
+#     for u in range(5):
+#         df = df.sample(frac=1).reset_index(drop=True)
+#         cross_validation_error[o] += (cross_validation_knn()/5) # cross_validation_weighted_knn()
+#
+#     y.append(cross_validation_error[o])
+#     x.append(o)
+#
+# draw_multiple_points(x, y)
