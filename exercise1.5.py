@@ -558,5 +558,33 @@ for n in range(len(df)):
 
 print("(TRAIN) TOTAL CLASSIFIED: ", tree.total_classified, ", TOTAL_OK: ", tree.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", tree.total_classified_one, ", PRECISION = ", tree.total_ok/tree.total_classified)
 
+random_forest = []
+tree_amount = 5
+for k in range(tree_amount):
+    dfTemp = df.copy()
+    dfTemp = dfTemp.sample(frac=0.6, replace=True)
+    random_forest.insert(k, create_tree_rec(dfTemp, podas=True))
+
+print("RANDOM FOREST CREATED")
+
+
+total_classified, total_ok, total_classified_one = 0, 0, 0
+
+for n in range(len(test_data)):
+    positives, negatives = 0, 0
+    for k in range(tree_amount):
+        result = random_forest[k].classify(test_data.iloc[n])
+        if result:
+            positives += 1
+        else:
+            negatives += 1
+    total_classified += 1
+    if positives > negatives:
+        total_classified_one += 1
+    if test_data.iloc[n]["Creditability"] == (1 if positives > negatives else 0):
+        total_ok += 1
+
+print("(RANDOM FOREST) TOTAL CLASSIFIED: ", total_classified, ", TOTAL_OK: ", total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", total_classified_one, ", PRECISION = ", total_ok/total_classified)
+
 
 # print(gain)
