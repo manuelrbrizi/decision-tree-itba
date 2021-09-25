@@ -1,6 +1,8 @@
 import random
 
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sn
 import math
 import time
 
@@ -410,6 +412,7 @@ gain = calculate_gain()
 #
 # print("--- %s seconds ---" % (time.time() - start_time))
 
+
 class Node:
     def __init__(self, value, name, isFinal = False):
         self.name = name
@@ -417,7 +420,11 @@ class Node:
         self.children = {}
         self.is_final = isFinal
         self.total_classified = 0
-        self.total_ok = 0
+        self.true_positive = 0
+        self.true_negative = 0
+        self.false_negative = 0
+        self.false_positive = 0
+        self.classified_correct = 0
         self.total_classified_one = 0
 
     def print_node(self, previous="", parent_value=""):
@@ -437,13 +444,21 @@ class Node:
                 # print("Creditability = ", row["Creditability"], ", Classified = ", current_node.value)
                 self.total_classified += 1
                 if row["Creditability"] == current_node.value:
-                    self.total_ok += 1
+                    self.classified_correct += 1
+                    if current_node.value == 1:
+                        self.true_positive += 1
+                    else:
+                        self.true_negative += 1
+                else:
+                    if row["Creditability"] == 1:
+                        self.false_negative += 1
+                    else:
+                        self.true_positive += 1
                 if current_node.value == 1:
                     self.total_classified_one += 1
                 if row["Creditability"] == current_node.value:
                     return True
                 return False
-            aux1 = current_node.name
             aux2 = row[current_node.name]
             depth += 1
             if aux2 in current_node.children:
@@ -451,21 +466,11 @@ class Node:
             else:
                 return False
 
-            # for key in current_node.children.keys():
-            #     if(current_node.children[key].classify(row)):
-            #         return True
-
-            # actual_value = row[current_node.name]
-            # for child in current_node.children:
-            #     if child.previous_attr_value == actual_value:
-            #         current_node = child
-            #         break
-
-
     def reset(self):
         self.total_classified = 0
-        self.total_ok = 0
+        self.true_positive = 0
         self.total_classified_one = 0
+
 
 def entropy_df(df):
     positive_cases = (df[df["Creditability"] == 1].count())[0]
@@ -478,7 +483,8 @@ def entropy_df(df):
         acum = -(positive_cases / total_cases) * math.log2(positive_cases / total_cases)
     return acum
 
-def gain(df,attr):
+
+def gain(df, attr):
     H = entropy_df(df)
     Hs = {}
     for value in df[attr].unique():
@@ -507,7 +513,6 @@ def create_tree_rec(df_cut, number=-1, podas=False):
         if attr != "Creditability":
             gain_map[attr] = gain(df_cut, attr)
     max_gain_attr = max(gain_map, key=gain_map.get)
-
 
     if podas:
         if df_cut["Creditability"].count() < 20:
@@ -541,22 +546,41 @@ def create_tree_rec(df_cut, number=-1, podas=False):
 
     return this_node
 
-tree = create_tree_rec(df,podas=True)
+def confusion_matrix(node):
+    array = [[0, 0], [0, 0]]
+    array[0][0] = node.true_positive
+    array[1][0] = node.false_negative
+    array[0][1] = node.false_positive
+    array[1][1] = node.true_negative
+    df_cm = pd.DataFrame(array, index=["Positive", "Negative"],
+                         columns=["Positive", "Negative"])
+    ax = plt.figure(figsize=(10, 7))
+    sn.heatmap(df_cm, annot=True, cmap="Blues")
+    plt.xlabel("Predicted")
+    plt.ylabel("Ground Truth")
+    plt.show()
+    return array
+
+
+tree = create_tree_rec(df, podas=True)
 tree.print_node()
 
 
 for n in range(len(test_data)):
     val = tree.classify(test_data.iloc[n])
+confusion_matrix(tree)
 
 
-print("(TEST) TOTAL CLASSIFIED: ", tree.total_classified, ", TOTAL_OK: ", tree.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", tree.total_classified_one, ", PRECISION = ", tree.total_ok/tree.total_classified)
+print("(TEST) TOTAL CLASSIFIED: ", tree.total_classified, ", TOTAL_OK: ", tree.classified_correct,
+      ", TOTAL_CLASSIFIED_WITH_ONE = ", tree.total_classified_one, ", PRECISION = ", tree.classified_correct / tree.total_classified)
 
 # Clasifico los ejemplos de train
 tree.reset()
 for n in range(len(df)):
     val = tree.classify(df.iloc[n])
 
-print("(TRAIN) TOTAL CLASSIFIED: ", tree.total_classified, ", TOTAL_OK: ", tree.total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", tree.total_classified_one, ", PRECISION = ", tree.total_ok/tree.total_classified)
+print("(TRAIN) TOTAL CLASSIFIED: ", tree.total_classified, ", TOTAL_OK: ", tree.true_positive,
+      ", TRUE POSITIVES = ", tree.true_positive, ", PRECISION = ", tree.classified_correct / tree.total_classified)
 
 random_forest = []
 tree_amount = 5
@@ -567,7 +591,10 @@ for k in range(tree_amount):
 
 print("RANDOM FOREST CREATED")
 
-
+true_positive = 0
+false_negative = 0
+false_positive = 0
+true_negative = 0
 total_classified, total_ok, total_classified_one = 0, 0, 0
 
 for n in range(len(test_data)):
@@ -583,8 +610,24 @@ for n in range(len(test_data)):
         total_classified_one += 1
     if test_data.iloc[n]["Creditability"] == (1 if positives > negatives else 0):
         total_ok += 1
+        if test_data.iloc[n]["Creditability"] == 1:
+            true_positive += 1
+        else:
+            true_negative += 1
+    else:
+        if test_data.iloc[n]["Creditability"] == 1:
+            false_negative += 1
+        else:
+            false_positive += 1
 
-print("(RANDOM FOREST) TOTAL CLASSIFIED: ", total_classified, ", TOTAL_OK: ", total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = ", total_classified_one, ", PRECISION = ", total_ok/total_classified)
+print("(RANDOM FOREST) TOTAL CLASSIFIED: ", total_classified, ", TOTAL_OK: ", total_ok, ", TOTAL_CLASSIFIED_WITH_ONE = "
+      , total_classified_one, ", PRECISION = ", total_ok/total_classified)
 
+tmp = Node("asd", 1)
+tmp.true_positive = true_positive
+tmp.false_negative = false_negative
+tmp.false_positive = false_positive
+tmp.true_negative = true_negative
+confusion_matrix(tmp)
 
 # print(gain)
